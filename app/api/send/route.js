@@ -9,18 +9,27 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { to, subject, html, from } = await req.json();
+    const payload = await req.json();
+    const { to, subject, html, from, attachments: payloadAttachments } = payload;
     if (!to || !subject || !html) {
       return NextResponse.json({ ok: false, error: 'Faltan campos: to, subject, html' }, { status: 400 });
     }
 
     const fromAddress = from || process.env.DEFAULT_FROM || 'onboarding@resend.dev';
     const resend = makeResend();
+
+    const attachments = (payloadAttachments || []).map(a => ({
+      filename: a.filename,
+      content: a.content, // base64
+    }));
+
     const result = await resend.emails.send({
       from: fromAddress,
       to: Array.isArray(to) ? to : [to],
       subject,
       html,
+      attachments,
+      tags: attachments.length > 0 ? [{ name: "type", value: "invoice" }] : [],
     });
 
     return NextResponse.json({ ok: true, id: result?.data?.id || null });
