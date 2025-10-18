@@ -1,21 +1,24 @@
-# Usamos una imagen base de Node.js ligera y segura.
-FROM node:20-bookworm-slim
-
-# Establecemos el directorio de trabajo dentro del contenedor.
+# ---- Builder ----
+FROM node:20-alpine AS builder
 WORKDIR /app
-
-# Copiamos los ficheros de dependencias para aprovechar la caché de Docker.
-COPY package.json package-lock.json ./
-
-# Instalamos únicamente las dependencias de producción para mantener la imagen ligera.
-RUN npm ci --only=production
-
-# Copiamos el resto del código de la aplicación (principalmente server.js).
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY package*.json ./
+RUN npm ci
 COPY . .
+RUN npm run build
 
-# Exponemos el puerto en el que la aplicación va a escuchar.
+# ---- Runner ----
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+# Copia la salida standalone + estáticos
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+# Si NO tienes carpeta public, comenta la siguiente línea
+COPY --from=builder /app/public ./public
+# Cloud Run usa 8080
 ENV PORT=8080
 EXPOSE 8080
-
-# El comando para iniciar la aplicación.
+# Next standalone genera server.js en la raíz copiada arriba
 CMD ["node", "server.js"]

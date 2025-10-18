@@ -1,9 +1,10 @@
+.git
 node_modules
 npm-debug.log
-Dockerfile
-.dockerignore
-.git
-.gitignore
+yarn.lock
+.yarn
 .next/cache
 .env
-.env.local
+.env.*
+Dockerfile
+cloudbuild.yaml

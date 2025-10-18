@@ -6,7 +6,7 @@ export default function Home() {
       <ul>
         <li><code>/api/ping</code> (salud)</li>
         <li><code>/api/send</code> (Resend)</li>
-        <li><code>/api/ping-backend</code> (llama al backend con ID token)</li>
+        <li><code>/api/ping-backend</code> (via bridge)</li>
       </ul>
     </main>
   );
