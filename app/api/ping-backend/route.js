@@ -15,11 +15,14 @@ export async function GET() {
     const auth = new GoogleAuth();
     const client = await auth.getIdTokenClient(audience);
 
-    // Ajusta el path a uno REAL de tu backend (por ejemplo /health o /status)
-    const target = `${backendUrl}/health`;
+    // De momento probamos contra "/" (sabemos que existe aunque devuelva 404)
+    const target = `${backendUrl}/`;
     const r = await client.request({ url: target, method: 'GET' });
 
-    return NextResponse.json({ ok: true, url: target, status: r.status, data: r.data }, { status: 200 });
+    return NextResponse.json(
+      { ok: true, url: target, status: r.status, data: r.data ?? null },
+      { status: 200 }
+    );
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: String(err?.message || err) },
