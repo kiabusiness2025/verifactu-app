@@ -1,39 +1,26 @@
-options:
-  logging: CLOUD_LOGGING_ONLY
-
 substitutions:
   _REGION: europe-west1
-  _SERVICE: verifactu-app
   _REPO: verifactu-repo
+  _SERVICE: verifactu-app
 
 steps:
-- name: gcr.io/k8s-skaffold/pack
-  entrypoint: pack
-  args:
-    - build
-    - europe-west1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
-    - --builder
-    - gcr.io/buildpacks/builder:v1
-    - --path
-    - .
-
-images:
-- europe-west1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
-
-- name: gcr.io/google.com/cloudsdktool/cloud-sdk
-  entrypoint: gcloud
-  args:
-    - run
-    - deploy
-    - ${_SERVICE}
-    - --image
-    - europe-west1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
-    - --region
-    - ${_REGION}
-    - --platform
-    - managed
-    - --allow-unauthenticated
-    - --port
-    - "8080"
-    - --service-account
-    - cr-runtime@${PROJECT_ID}.iam.gserviceaccount.com
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA'
+      - .
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA'
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=europe-west1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA
+      - --region=${_REGION}
+      - --allow-unauthenticated
+      - --service-account=cr-runtime@$PROJECT_ID.iam.gserviceaccount.com
