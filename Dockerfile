@@ -1,37 +1,29 @@
 # ---------- Builder ----------
-FROM node:20-alpine AS builder
-# Dependencias de compilación para módulos nativos (sharp, etc.)
-RUN apk add --no-cache libc6-compat python3 make g++ openssl
+FROM node:20-bookworm-slim AS builder
 WORKDIR /app
+# Herramientas mínimas (por si algún módulo nativo las requiere)
+RUN apt-get update && apt-get install -y python3 make g++ ca-certificates && rm -rf /var/lib/apt/lists/*
 
-# Mejor caché: primero manifests
+# Cache eficiente
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# Copia el resto del código
+# Copiamos el resto y construimos
 COPY . .
-
-# Desactiva telemetría de Next en CI
 ENV NEXT_TELEMETRY_DISABLED=1
-
-# Construye Next en modo standalone
 RUN npm run build
 
 # ---------- Runner ----------
-FROM node:20-alpine AS runner
+FROM node:20-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8080
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Copiamos el artefacto standalone y estáticos
+# Copiamos el artefacto standalone y los estáticos
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
-
-# (Opcional) Usuario no-root
-# RUN addgroup -S nextjs && adduser -S nextjs -G nextjs
-# USER nextjs
 
 EXPOSE 8080
 CMD ["node", "server.js"]
