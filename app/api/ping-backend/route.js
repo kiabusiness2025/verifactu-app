@@ -1,53 +1,21 @@
 import { NextResponse } from 'next/server';
-import { GoogleAuth } from 'google-auth-library';
+import { backendFetch } from '../../../lib/backendFetch';
 
-// GET /api/ping-backend?p=/ruta   (si omites ?p, usa "/")
+// GET /api/ping-backend?p=/api/version   (por defecto /api/version)
 export async function GET(request) {
   try {
-    const backendUrl = process.env.BACKEND_URL;
-    const audience   = process.env.BACKEND_AUDIENCE;
-    if (!backendUrl || !audience) {
-      return NextResponse.json(
-        { ok: false, error: 'Faltan BACKEND_URL/BACKEND_AUDIENCE' },
-        { status: 500 }
-      );
-    }
-
     const { searchParams } = new URL(request.url);
-    const p = searchParams.get('p') || '/';
-    const target = backendUrl.replace(/\/+$/,'') + (p.startsWith('/') ? p : `/${p}`);
+    const p = searchParams.get('p') || '/api/version'; // <-- ajusta aquí a tu ruta backend real
+    const r = await backendFetch(p);
 
-    const auth = new GoogleAuth();
-    const client = await auth.getIdTokenClient(audience);
-    const headers = await client.getRequestHeaders();
+    return NextResponse.json({
+      ok: r.ok,
+      url: p,
+      status: r.status,
+      data: r.data, // si el backend devuelve JSON verás el objeto aquí
+    }, { status: r.ok ? 200 : 502 });
 
-    const res = await fetch(target, {
-      method: 'GET',
-      headers: {
-        ...headers,
-        'Accept': 'application/json,text/plain,*/*',
-      },
-    });
-
-    let body = null;
-    const ct = res.headers.get('content-type') || '';
-    if (ct.includes('application/json')) {
-      body = await res.json();
-    } else {
-      body = await res.text();
-      if (typeof body === 'string' && body.length > 2000) {
-        body = body.slice(0, 2000) + '...<truncated>';
-      }
-    }
-
-    return NextResponse.json(
-      { ok: true, url: target, status: res.status, body },
-      { status: 200 }
-    );
   } catch (err) {
-    return NextResponse.json(
-      { ok: false, error: String(err?.message || err) },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: String(err?.message || err) }, { status: 500 });
   }
 }
