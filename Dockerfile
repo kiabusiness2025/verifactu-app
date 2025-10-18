@@ -1,29 +1,21 @@
-# ---------- Builder ----------
-FROM node:20-bookworm-slim AS builder
-WORKDIR /app
-# Herramientas mínimas (por si algún módulo nativo las requiere)
-RUN apt-get update && apt-get install -y python3 make g++ ca-certificates && rm -rf /var/lib/apt/lists/*
+# Usamos una imagen base de Node.js ligera y segura.
+FROM node:20-bookworm-slim
 
-# Cache eficiente
+# Establecemos el directorio de trabajo dentro del contenedor.
+WORKDIR /app
+
+# Copiamos los ficheros de dependencias para aprovechar la caché de Docker.
 COPY package.json package-lock.json ./
-RUN npm ci
 
-# Copiamos el resto y construimos
+# Instalamos únicamente las dependencias de producción para mantener la imagen ligera.
+RUN npm ci --only=production
+
+# Copiamos el resto del código de la aplicación (principalmente server.js).
 COPY . .
-ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
 
-# ---------- Runner ----------
-FROM node:20-bookworm-slim AS runner
-WORKDIR /app
-ENV NODE_ENV=production
+# Exponemos el puerto en el que la aplicación va a escuchar.
 ENV PORT=8080
-ENV NEXT_TELEMETRY_DISABLED=1
-
-# Copiamos el artefacto standalone y los estáticos
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
-
 EXPOSE 8080
+
+# El comando para iniciar la aplicación.
 CMD ["node", "server.js"]

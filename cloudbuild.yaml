@@ -1,26 +1,38 @@
+# Define variables para reutilizar en los pasos de la compilación
 substitutions:
   _REGION: europe-west1
   _REPO: verifactu-repo
   _SERVICE: verifactu-app
 
 steps:
+  # 1. Construir la imagen del contenedor usando el Dockerfile
+  # La etiqueta de la imagen incluye el ID del commit para un versionado único
   - name: gcr.io/cloud-builders/docker
     args:
-      - build
+      - 'build'
       - -t
       - 'europe-west1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA'
-      - .
+      - '.'
+
+  # 2. Subir la imagen construida a Google Artifact Registry
   - name: gcr.io/cloud-builders/docker
     args:
-      - push
+      - 'push'
       - 'europe-west1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA'
+
+  # 3. Desplegar la nueva versión de la imagen en Cloud Run
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: gcloud
+    entrypoint: 'gcloud'
     args:
-      - run
-      - deploy
-      - ${_SERVICE}
-      - --image=europe-west1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA
-      - --region=${_REGION}
-      - --allow-unauthenticated
-      - --service-account=cr-runtime@$PROJECT_ID.iam.gserviceaccount.com
+      - 'run'
+      - 'deploy'
+      - '${_SERVICE}'
+      - '--image=europe-west1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA'
+      - '--region=${_REGION}'
+      - '--platform=managed'
+      - '--allow-unauthenticated' # Permite invocaciones públicas
+      - '--service-account=cr-runtime@${PROJECT_ID}.iam.gserviceaccount.com'
+
+# Especifica la imagen final para que aparezca en los detalles de la compilación
+images:
+  - 'europe-west1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA'
