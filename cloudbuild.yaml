@@ -1,0 +1,31 @@
+steps:
+  # Step 1: Build the Docker image
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - 'build'
+      - '--tag=europe-west1-docker.pkg.dev/$PROJECT_ID/verifactu-repo/verifactu-app:$BUILD_ID'
+      - '--tag=europe-west1-docker.pkg.dev/$PROJECT_ID/verifactu-repo/verifactu-app:latest'
+      # Build from the current directory
+      - '.'
+
+  # Step 2: Deploy to Cloud Run
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'verifactu-app'
+      - "--image=europe-west1-docker.pkg.dev/$PROJECT_ID/verifactu-repo/verifactu-app:$BUILD_ID"
+      - "--region=europe-west1"
+      - "--platform=managed"
+      - "--allow-unauthenticated"
+      - "--service-account=cr-runtime@$PROJECT_ID.iam.gserviceaccount.com"
+      # Avoid interactive prompts
+      - '--quiet'
+timeout: "1200s"
+
+# Step 3: Push the images to Artifact Registry.
+# Cloud Build does this automatically after the 'steps' succeed.
+images:
+  - 'europe-west1-docker.pkg.dev/$PROJECT_ID/verifactu-repo/verifactu-app:$BUILD_ID'
+  - 'europe-west1-docker.pkg.dev/$PROJECT_ID/verifactu-repo/verifactu-app:latest'
