@@ -1,0 +1,137 @@
+name: Isaak – Auditoría técnica inicial
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  GCP_REGION: europe-west1
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Auth to Google Cloud via WIF
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/${{ secrets.WIF_POOL }}/providers/${{ secrets.WIF_PROVIDER }}
+          service_account: isaak-agent@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Prepare tools
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y jq tree
+
+      - name: Run audit and build report
+        id: audit
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REPO_NAME="$(basename "$GITHUB_REPOSITORY")"
+          NOW="$(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+          REPORT_PATH="docs/isaak_audit_report.md"
+          mkdir -p docs
+
+          # Detect basics
+          HAS_DOCKERFILE="no"; [[ -f Dockerfile || -f docker/Dockerfile ]] && HAS_DOCKERFILE="sí"
+          HAS_PACKAGE_JSON="no"; [[ -f package.json ]] && HAS_PACKAGE_JSON="sí"
+          HAS_REQ="no"; [[ -f requirements.txt ]] && HAS_REQ="sí"
+          HAS_PNPM="no"; [[ -f pnpm-lock.yaml ]] && HAS_PNPM="sí"
+          HAS_YARN="no"; [[ -f yarn.lock ]] && HAS_YARN="sí"
+
+          # Node deps (if any)
+          NODE_DEPS=""
+          if [[ -f package.json ]]; then
+            NODE_DEPS=$(jq -r '
+              {
+                dependencies: (.dependencies // {}),
+                devDependencies: (.devDependencies // {})
+              }' package.json)
+          fi
+
+          # Python deps (if any)
+          PY_DEPS=""
+          if [[ -f requirements.txt ]]; then
+            PY_DEPS=$(sed 's/^/- /' requirements.txt | sed 's/==/ /')
+          fi
+
+          # Cloud Run services (visible with current perms)
+          RUN_LIST="$(gcloud run services list --platform=managed --region="${GCP_REGION}" 2>/dev/null || true)"
+
+          # Basic tree (limited depth)
+          TREE_OUT="$(tree -L 2 -a -I '.git|node_modules|.next|dist|build|venv|.venv' || true)"
+
+          cat > "${REPORT_PATH}" <<'EOF'
+# Informe de auditoría – Isaak
+
+Este informe ha sido generado automáticamente por **Isaak**.
+
+EOF
+
+          cat >> "${REPORT_PATH}" <<EOF
+**Repositorio:** ${REPO_NAME}  
+**Fecha:** ${NOW}  
+
+## Resumen
+- Dockerfile: **${HAS_DOCKERFILE}**
+- package.json: **${HAS_PACKAGE_JSON}**
+- requirements.txt: **${HAS_REQ}**
+- pnpm-lock.yaml: **${HAS_PNPM}**
+- yarn.lock: **${HAS_YARN}**
+
+## Estructura (nivel 2)
+\`\`\`
+${TREE_OUT}
+\`\`\`
+
+## Dependencias (Node)
+\`\`\`json
+${NODE_DEPS}
+\`\`\`
+
+## Dependencias (Python)
+${PY_DEPS:-_No se detectaron requirements.txt_}
+
+## Servicios Cloud Run detectados (region ${GCP_REGION})
+\`\`\`
+${RUN_LIST:-No visible con los permisos actuales o región vacía}
+\`\`\`
+
+## Checklist recomendada (siguiente iteración)
+- [ ] Añadir pipeline CI (build + test) si no existe.
+- [ ] Imagen de contenedor reproducible (Dockerfile + bloqueo de versiones).
+- [ ] Variables y secretos en **GitHub Secrets / Secret Manager** (nunca en el repo).
+- [ ] Validaciones AEAT/Verifactu: esquema, idempotencia y trazabilidad por factura.
+- [ ] Preparar despliegue a Cloud Run (entornos: dev/pre/prod).
+- [ ] Instrumentación: logs, errores y métricas básicas.
+
+> Generado automáticamente por Isaak.
+EOF
+
+          echo "report=${REPORT_PATH}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: isaak_audit_report
+          path: ${{ steps.audit.outputs.report }}
+
+      # (Opcional) Para commitear el informe al repo, descomenta este bloque:
+      # - name: Commit report to repo
+      #   if: always()
+      #   run: |
+      #     git config user.name "isaak-bot"
+      #     git config user.email "isaak-bot@users.noreply.github.com"
+      #     git add docs/isaak_audit_report.md
+      #     git commit -m "chore(isaak): add audit report"
+      #     git push
