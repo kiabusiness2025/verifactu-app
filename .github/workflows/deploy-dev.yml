@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Auth to Google Cloud via WIF
         uses: google-github-actions/auth@v2
@@ -38,7 +40,8 @@ jobs:
             echo "strategy=source" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build & Push (Dockerfile path)
+      - name: Build & Push (Dockerfile)
+        id: build_and_push
         if: steps.detect.outputs.strategy == 'docker'
         shell: bash
         run: |
@@ -47,30 +50,25 @@ jobs:
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
 
       - name: Deploy from source (Buildpacks)
-        id: from_source
         if: steps.detect.outputs.strategy == 'source'
         shell: bash
         run: |
-          # Cloud Run construye con Buildpacks y despliega directamente
           gcloud run deploy "${SERVICE}" \
             --region="${REGION}" \
             --source="." \
             --service-account="run-runtime@${PROJECT_ID}.iam.gserviceaccount.com" \
-            --allow-unauthenticated || true
+            --allow-unauthenticated
 
-      - name: Deploy image (if Docker)
+      - name: Deploy image (Docker)
         if: steps.detect.outputs.strategy == 'docker'
         shell: bash
         run: |
-          IMAGE="${{ steps.build_and_push.outputs.image || '' }}"
-          if [[ -z "${IMAGE}" ]]; then
-            IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${SERVICE}:${GITHUB_SHA}"
-          fi
+          IMAGE="${{ steps.build_and_push.outputs.image }}"
           gcloud run deploy "${SERVICE}" \
             --region="${REGION}" \
             --image="${IMAGE}" \
             --service-account="run-runtime@${PROJECT_ID}.iam.gserviceaccount.com" \
-            --allow-unauthenticated || true
+            --allow-unauthenticated
 
       - name: Show service URL
         shell: bash
