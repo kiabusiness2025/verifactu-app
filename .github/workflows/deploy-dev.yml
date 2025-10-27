@@ -1,0 +1,78 @@
+name: Deploy to Cloud Run (dev)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      REGION: ${{ vars.CLOUD_RUN_REGION }}
+      SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}
+      PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      REPO: ${{ vars.ARTIFACT_REPO }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Auth to Google Cloud via WIF
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/${{ secrets.WIF_POOL }}/providers/${{ secrets.WIF_PROVIDER }}
+          service_account: isaak-agent@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Detect build strategy
+        id: detect
+        shell: bash
+        run: |
+          if [[ -f Dockerfile || -f docker/Dockerfile ]]; then
+            echo "strategy=docker" >> "$GITHUB_OUTPUT"
+          else
+            echo "strategy=source" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build & Push (Dockerfile path)
+        if: steps.detect.outputs.strategy == 'docker'
+        shell: bash
+        run: |
+          IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${SERVICE}:${GITHUB_SHA}"
+          gcloud builds submit --tag "${IMAGE}"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy from source (Buildpacks)
+        id: from_source
+        if: steps.detect.outputs.strategy == 'source'
+        shell: bash
+        run: |
+          # Cloud Run construye con Buildpacks y despliega directamente
+          gcloud run deploy "${SERVICE}" \
+            --region="${REGION}" \
+            --source="." \
+            --service-account="run-runtime@${PROJECT_ID}.iam.gserviceaccount.com" \
+            --allow-unauthenticated || true
+
+      - name: Deploy image (if Docker)
+        if: steps.detect.outputs.strategy == 'docker'
+        shell: bash
+        run: |
+          IMAGE="${{ steps.build_and_push.outputs.image || '' }}"
+          if [[ -z "${IMAGE}" ]]; then
+            IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${SERVICE}:${GITHUB_SHA}"
+          fi
+          gcloud run deploy "${SERVICE}" \
+            --region="${REGION}" \
+            --image="${IMAGE}" \
+            --service-account="run-runtime@${PROJECT_ID}.iam.gserviceaccount.com" \
+            --allow-unauthenticated || true
+
+      - name: Show service URL
+        shell: bash
+        run: |
+          gcloud run services describe "${SERVICE}" --region="${REGION}" --format='value(status.url)'
