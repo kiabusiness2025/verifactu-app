@@ -14,6 +14,7 @@ jobs:
       REGION: ${{ vars.CLOUD_RUN_REGION }}              # ej. europe-west1
       SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}            # ej. verifactu-app-dev
       PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}         # verifactu-business
+      PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }} # 536174799167
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,13 +30,13 @@ jobs:
       - name: Setup gcloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Deploy from source (Buildpacks) using isaak-agent as build SA
+      - name: Deploy from source (Buildpacks) using Cloud Build SA
         shell: bash
         run: |
           gcloud run deploy "${SERVICE}" \
             --region="${REGION}" \
             --source="." \
-            --build-service-account="projects/${PROJECT_ID}/serviceAccounts/isaak-agent@${PROJECT_ID}.iam.gserviceaccount.com" \
+            --build-service-account="projects/${PROJECT_ID}/serviceAccounts/${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
             --service-account="projects/${PROJECT_ID}/serviceAccounts/run-runtime@${PROJECT_ID}.iam.gserviceaccount.com" \
             --allow-unauthenticated
 
