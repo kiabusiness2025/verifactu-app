@@ -23,6 +23,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Preflight – layout & package.json sanity
+        run: |
+          sudo apt-get update -y && sudo apt-get install -y tree jq
+          echo "== Árbol (2 niveles) ==" && tree -L 2 -a -I '.git|node_modules|dist|build|.next'
+          echo "== Tamaño package.json ==" && wc -c package.json || true
+          echo "== Validar JSON ==" && jq . package.json >/dev/null && echo "JSON OK" || (echo "JSON inválido o ausente"; exit 1)
+
       - name: Auth to Google Cloud via WIF
         uses: google-github-actions/auth@v2
         with:
@@ -36,15 +43,15 @@ jobs:
         run: |
           gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
 
-      - name: Build & Push image with Cloud Build (user-managed SA + logs bucket)
+      - name: Build & Push image with Cloud Build (no-cache + logs bucket)
         id: build
         run: |
           IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${SERVICE}:${GITHUB_SHA}"
           echo "IMAGE=${IMAGE}" >> $GITHUB_ENV
           gcloud builds submit \
             --tag "${IMAGE}" \
-            --service-account="projects/${PROJECT_ID}/serviceAccounts/build-runner@${PROJECT_ID}.iam.gserviceaccount.com" \
-            --gcs-log-dir="gs://${LOGS_BUCKET}"
+            --gcs-log-dir="gs://${LOGS_BUCKET}" \
+            --no-cache
 
       - name: Deploy to Cloud Run (from image)
         run: |
