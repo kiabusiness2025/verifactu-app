@@ -11,14 +11,14 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      REGION: ${{ vars.CLOUD_RUN_REGION }}            # p.ej. europe-west1
-      SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}          # p.ej. verifactu-app-dev
-      PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}       # verifactu-business
+      REGION: ${{ vars.CLOUD_RUN_REGION }}              # ej. europe-west1
+      SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}            # ej. verifactu-app-dev
+      PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}         # verifactu-business
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # evita problemas de git en builders
+          fetch-depth: 0
 
       - name: Authenticate to Google Cloud via WIF
         uses: google-github-actions/auth@v2
@@ -35,13 +35,11 @@ jobs:
           gcloud run deploy "${SERVICE}" \
             --region="${REGION}" \
             --source="." \
-            --build-service-account="isaak-agent@${PROJECT_ID}.iam.gserviceaccount.com" \
-            --service-account="run-runtime@${PROJECT_ID}.iam.gserviceaccount.com" \
+            --build-service-account="projects/${PROJECT_ID}/serviceAccounts/isaak-agent@${PROJECT_ID}.iam.gserviceaccount.com" \
+            --service-account="projects/${PROJECT_ID}/serviceAccounts/run-runtime@${PROJECT_ID}.iam.gserviceaccount.com" \
             --allow-unauthenticated
 
       - name: Show service URL
         shell: bash
         run: |
-          gcloud run services describe "${SERVICE}" --region="${REGION}" --format='value(status.url)'
-
           gcloud run services describe "${SERVICE}" --region="${REGION}" --format='value(status.url)'
