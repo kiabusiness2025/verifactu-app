@@ -1,4 +1,4 @@
-name: Deploy to Cloud Run (dev) – lite
+name: Deploy to Cloud Run (dev) — docker
 
 on:
   workflow_dispatch:
@@ -11,17 +11,17 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      REGION: ${{ vars.CLOUD_RUN_REGION }}              # ej. europe-west1
-      SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}            # ej. verifactu-app-dev
-      PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}         # verifactu-business
-      PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }} # 536174799167
+      REGION: ${{ vars.CLOUD_RUN_REGION }}                 # ej. europe-west1
+      SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}               # ej. verifactu-app-dev
+      PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}            # verifactu-business
+      REPO: ${{ vars.ARTIFACT_REPO }}                      # verifactu
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0                                   # evita problemas con Docker/metadata
 
-      - name: Authenticate to Google Cloud via WIF
+      - name: Auth to Google Cloud via WIF
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/${{ secrets.WIF_POOL }}/providers/${{ secrets.WIF_PROVIDER }}
@@ -30,17 +30,25 @@ jobs:
       - name: Setup gcloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Deploy from source (Buildpacks) using Cloud Build SA
-        shell: bash
+      - name: Configure Docker auth for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
+
+      - name: Build & Push image with Cloud Build
+        id: build
+        run: |
+          IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${SERVICE}:${GITHUB_SHA}"
+          echo "IMAGE=${IMAGE}" >> $GITHUB_ENV
+          gcloud builds submit --tag "${IMAGE}"
+
+      - name: Deploy to Cloud Run (from image)
         run: |
           gcloud run deploy "${SERVICE}" \
             --region="${REGION}" \
-            --source="." \
-            --build-service-account="projects/${PROJECT_ID}/serviceAccounts/${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
-            --service-account="projects/${PROJECT_ID}/serviceAccounts/run-runtime@${PROJECT_ID}.iam.gserviceaccount.com" \
+            --image="${IMAGE}" \
+            --service-account="run-runtime@${PROJECT_ID}.iam.gserviceaccount.com" \
             --allow-unauthenticated
 
       - name: Show service URL
-        shell: bash
         run: |
           gcloud run services describe "${SERVICE}" --region="${REGION}" --format='value(status.url)'
