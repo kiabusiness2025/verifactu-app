@@ -1,13 +1,1 @@
-{
-  "name": "verifactu-app",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "start": "node server.js",
-    "build": "echo \"(build pendiente)\""
-  },
-  "dependencies": {
-    "express": "^4.19.2"
-  }
-}
+{"name":"verifactu-app","version":"0.1.0","private":true,"engines":{"node":"18.x"},"scripts":{"start":"node server.js","start:dev":"NODE_ENV=development node server.js","test":"echo \"No tests configured\" && exit 0"},"dependencies":{"express":"^4.18.2"}}
