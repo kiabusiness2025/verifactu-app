@@ -2,9 +2,12 @@
   "name": "verifactu-app",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "build": "echo \"(pendiente)\"",
-    "start": "node server.js"
+    "start": "node server.js",
+    "build": "echo \"(build pendiente)\""
   },
-  "dependencies": {}
+  "dependencies": {
+    "express": "^4.19.2"
+  }
 }
