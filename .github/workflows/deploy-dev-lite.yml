@@ -11,11 +11,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      REGION: ${{ vars.CLOUD_RUN_REGION }}                 # ej. europe-west1
-      SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}               # ej. verifactu-app-dev
-      PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}            # verifactu-business
-      PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }}    # 536174799167
-      REPO: ${{ vars.ARTIFACT_REPO }}                      # verifactu
+      REGION: ${{ vars.CLOUD_RUN_REGION }}               # ej. europe-west1
+      SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}             # ej. verifactu-app-dev
+      PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}          # verifactu-business
+      PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }}  # 536174799167
+      REPO: ${{ vars.ARTIFACT_REPO }}                    # verifactu
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,7 +42,8 @@ jobs:
           echo "IMAGE=${IMAGE}" >> $GITHUB_ENV
           gcloud builds submit \
             --tag "${IMAGE}" \
-            --service-account="projects/${PROJECT_ID}/serviceAccounts/build-runner@${PROJECT_ID}.iam.gserviceaccount.com"
+            --service-account="projects/${PROJECT_ID}/serviceAccounts/build-runner@${PROJECT_ID}.iam.gserviceaccount.com" \
+            --logging=CLOUD_LOGGING_ONLY
 
       - name: Deploy to Cloud Run (from image)
         run: |
