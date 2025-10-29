@@ -1,0 +1,69 @@
+name: Deploy to Cloud Run (dev) — docker
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      REGION: ${{ vars.CLOUD_RUN_REGION }}               # ej. europe-west1
+      SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}             # ej. verifactu-app-dev
+      PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}          # verifactu-business
+      PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }}  # 536174799167
+      REPO: ${{ vars.ARTIFACT_REPO }}                    # verifactu
+      LOGS_BUCKET: ${{ secrets.GCP_PROJECT_ID }}-build-logs
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Auth to Google Cloud via WIF
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/${{ secrets.WIF_POOL }}/providers/${{ secrets.WIF_PROVIDER }}
+          service_account: isaak-agent@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+
+      - name: Setup gcloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker auth for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
+
+      # --- PREVIO: ver estructura y validar package.json (para evitar EJSONPARSE) ---
+      - name: Preflight – layout & package.json sanity
+        run: |
+          sudo apt-get update -y && sudo apt-get install -y tree jq
+          echo "== Árbol (nivel 2) ==" && tree -L 2 -a -I '.git|node_modules|dist|build|.next'
+          echo "== package.json tamaño ==" && (wc -c package.json || true)
+          echo "== validar JSON ==" && jq . package.json >/dev/null && echo "JSON OK" || (echo "JSON inválido o no encontrado"; exit 1)
+
+      # --- BUILD CON DOCKERFILE DE LA RAÍZ + SA 'build-runner' + bucket de logs ---
+      - name: Build & Push image with Cloud Build (user-managed SA + logs bucket)
+        id: build
+        run: |
+          IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${SERVICE}:${GITHUB_SHA}"
+          echo "IMAGE=${IMAGE}" >> $GITHUB_ENV
+          gcloud builds submit \
+            --tag "${IMAGE}" \
+            --file Dockerfile \
+            --service-account="projects/${PROJECT_ID}/serviceAccounts/build-runner@${PROJECT_ID}.iam.gserviceaccount.com" \
+            --gcs-log-dir="gs://${LOGS_BUCKET}"
+
+      - name: Deploy to Cloud Run (from image)
+        run: |
+          gcloud run deploy "${SERVICE}" \
+            --region="${REGION}" \
+            --image="${IMAGE}" \
+            --service-account="run-runtime@${PROJECT_ID}.iam.gserviceaccount.com" \
+            --allow-unauthenticated
+
+      - name: Show service URL
+        run: |
+          gcloud run services describe "${SERVICE}" --region="${REGION}" --format='value(status.url)'
