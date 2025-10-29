@@ -6,6 +6,4 @@ app.get("/", (req, res) => {
 });
 
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-  console.log(`Servidor escuchando en puerto ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Servidor en ${PORT}`));
