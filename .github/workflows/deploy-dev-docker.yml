@@ -36,7 +36,7 @@ jobs:
         run: |
           gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
 
-      # --- PREVIO: ver estructura y validar package.json (para evitar EJSONPARSE) ---
+      # Pre-chequeo para evitar EJSONPARSE
       - name: Preflight – layout & package.json sanity
         run: |
           sudo apt-get update -y && sudo apt-get install -y tree jq
@@ -44,7 +44,6 @@ jobs:
           echo "== package.json tamaño ==" && (wc -c package.json || true)
           echo "== validar JSON ==" && jq . package.json >/dev/null && echo "JSON OK" || (echo "JSON inválido o no encontrado"; exit 1)
 
-      # --- BUILD CON DOCKERFILE DE LA RAÍZ + SA 'build-runner' + bucket de logs ---
       - name: Build & Push image with Cloud Build (user-managed SA + logs bucket)
         id: build
         run: |
@@ -52,9 +51,8 @@ jobs:
           echo "IMAGE=${IMAGE}" >> $GITHUB_ENV
           gcloud builds submit \
             --tag "${IMAGE}" \
-            --file Dockerfile \
-            --service-account="projects/${PROJECT_ID}/serviceAccounts/build-runner@${PROJECT_ID}.iam.gserviceaccount.com" \
-            --gcs-log-dir="gs://${LOGS_BUCKET}"
+            --gcs-log-dir="gs://${LOGS_BUCKET}" \
+            --service-account="projects/${PROJECT_ID}/serviceAccounts/build-runner@${PROJECT_ID}.iam.gserviceaccount.com"
 
       - name: Deploy to Cloud Run (from image)
         run: |
